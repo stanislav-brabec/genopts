@@ -1,10 +1,4 @@
-#! /bin/bash
-
-# Your genopts section can start anywhere in code.
-
 @genopts
-
-@code_style line_up function_keyword tabs casetab
 
 @program genopts_example
 
@@ -21,13 +15,13 @@
 @usage [OPTION]... [FILE]...
 
 @short
-Shows an example of all genopts features.
+Shows an exampldfds sg g sfg dfg gfd ssdg dfg dgf dgf dfg fgdgr reg egre esrg eg esg reg ger e se of all genopts features.
 
 @defaults MYOPTIONS
 There can be defaults stored in variable.
 
 @switch SWI -s --switch
-Shows usage of simple switch.
+Shows usage of simple switch sfa sdf sf fref er egrg erg ereg eg erg ergsreg drsg gs erg esg ergs ersg ersg ersg se.
 
 @cntswitch VER -v --verbose
 Shows usage of countable switch.
@@ -44,6 +38,8 @@ Switch description can also be multi-line.
 
 @option SHO -S=VALUE
 Use this trick for defining short option with value.
+
+@options_only
 
 @end
 
@@ -62,8 +58,6 @@ fi
 $OPTARG_LONGO && echo "Long only switch was present."
 $OPTARG_SHO && echo "Short value option was present with value $OPTVAL_SHO."
 
-
-echo "And non-option arguments were: \"${ARGV[*]}\"" # We can use ${ARGV[@]},
-						     # see bash(1) for differences.
+echo "(Non-option arguments are prohibited.)"
 
 exit 0
