@@ -1,7 +1,13 @@
 #! /bin/bash
 
-exec 0<$1.gopts 1>$1.generated
-chmod +x $1.generated
+if [ -e $1.gopts ]
+then
+    exec 0<$1.gopts 1>$1
+    chmod +x $1
+else
+    echo "Input file $1.gopts doesn't exist."
+    exit 1
+fi
 
 gen_option()
 {
@@ -9,15 +15,18 @@ gen_option()
     LONGOPT=
     FIRSTARG=true
     DEFAULT=
+    SCANARGS=true
     for i in $1
     do
-    case $i in
-	--* )
-	    $FIRSTARG && echo >&2 "Error: No OPTNAME in $1"
-	    FIRSTARG=false
-	    REQ_ARG=true
-	    LONGOPT="$i"
-	    LONGPARSE="$LONGPARSE
+    if $SCANARGS
+    then
+	case $i in
+	    --* )
+		$FIRSTARG && echo >&2 "Error: No OPTNAME in $1"
+		FIRSTARG=false
+		REQ_ARG=true
+		LONGOPT="$i"
+		LONGPARSE="$LONGPARSE
 	${i%%=*} )
 	    [[ \$# < 2 ]] && opt_err_req_arg $i
 	    shift
@@ -28,13 +37,13 @@ gen_option()
 	    OPTARG_$OPTNAME=true
 	    OPTVAL_$OPTNAME=\"\${1#${i%%=*}=}\"
 	    ;;"
-	    ;;
-	-* )
-	    $FIRSTARG && echo >&2 "Error: No OPTNAME in $1"
-	    FIRSTARG=false
-	    REQ_SARG=true
-	    SHORTOPT="$i"
-	    SHORTPARSE="$SHORTPARSE
+		;;
+	    -* )
+		$FIRSTARG && echo >&2 "Error: No OPTNAME in $1"
+		FIRSTARG=false
+		REQ_SARG=true
+		SHORTOPT="$i"
+		SHORTPARSE="$SHORTPARSE
 		${i:1:1} )
 		    OPTARG_$OPTNAME=true
 		    OPTVAL_$OPTNAME=\"\${OPTTMP:1}\"
@@ -47,17 +56,21 @@ gen_option()
 			break
 		    fi
 		    ;;"
-	    ;;
-	* )
-	    if $FIRSTARG
-	    then
-		FIRSTARG=false
-		OPTNAME="$i"
-	    else
-		DEFAULT="$i"
-	    fi
-	    ;;
-	esac
+		;;
+	    * )
+		if $FIRSTARG
+		then
+		    FIRSTARG=false
+		    OPTNAME="$i"
+		else
+		    SCANARGS=false
+		    DEFAULT="$i"
+		fi
+		;;
+	    esac
+	else
+	    DEFAULT="$DEFAULT $i"
+	fi
     done
     DEFVARS="$DEFVARS
 OPTARG_$OPTNAME=false
@@ -78,9 +91,16 @@ gen_switch()
 	    FIRSTARG=false
 	    NO_ARG=true
 	    LONGOPT="$i"
+	    if $3
+	    then
+		OPTCNTMP="
+	    OPTCNT_$OPTNAME=\$[OPTCNT_$OPTNAME+1]"
+	    else
+		OPTCNTMP=
+	    fi
 	    LONGPARSE="$LONGPARSE
 	$i )
-	    OPTARG_$OPTNAME=true
+	    OPTARG_$OPTNAME=true$OPTCNTMP
 	    ;;
 	$i=* )
 	    opt_err_no_arg $i
@@ -90,9 +110,16 @@ gen_switch()
 	    $FIRSTARG && echo >&2 "Error: No OPTNAME in $1"
 	    FIRSTARG=false
 	    SHORTOPT="$i"
+	    if $3
+	    then
+		OPTCNTMP="
+		    OPTCNT_$OPTNAME=\$[OPTCNT_$OPTNAME+1]"
+	    else
+		OPTCNTMP=
+	    fi
 	    SHORTPARSE="$SHORTPARSE
 		${i:1:1} )
-		    OPTARG_$OPTNAME=true
+		    OPTARG_$OPTNAME=true$OPTCNTMP
 		    ;;"
 	    ;;
 	* )
@@ -106,8 +133,15 @@ gen_switch()
 	    ;;
 	esac
     done
+    if $3
+    then
+	OPTCNTMP="
+OPTCNT_$OPTNAME=0"
+    else
+	OPTCNTMP=
+    fi
     DEFVARS="$DEFVARS
-OPTARG_$OPTNAME=false"
+OPTARG_$OPTNAME=false$OPTCNTMP"
     genhelp "$SHORTOPT" "$LONGOPT" "$2"
 }
 
@@ -142,18 +176,51 @@ OPTITB=
 		OPTSTRING="${1:0:2}, $2"
 	    ;;
     esac
-    if [[ ${#OPTSTRING} > $HELPSIZE ]]
+    if [[ ${#OPTSTRING} -gt $HELPSIZE ]]
     then HELPSIZE=${#OPTSTRING}
     fi
-    dohelp "$OPTSTRING" "'${2//\'/\'}'"
-    if [ "$SHORTOPTT$LONGOPTT" = xx ]
-    then
-	BOTHOPT="  $SHORTOPT, $LONGOPT"
-    else
-	BOTHOPT="  $SHORTOPT  $LONGOPT"
-    fi
     HELP="$HELP
-$BOTHOPT$2"
+usehelpi \"$OPTSTRING\"
+$REPLYTO"
+}
+
+usehelpi()
+{
+    OPTSTRING="$1$SPACES"
+    OPTSTRING="${OPTSTRING:0:$HELPSIZE}"
+    if [[ ${#1} -gt $HELPSIZE ]]
+    then
+	OPTSTRING="$1 "
+    fi
+    HELPFL=true
+}
+SPACES="                           "
+usehelp()
+{
+    if $HELPFL
+    then
+	echo "  $OPTSTRING${HELPS[$1]}"
+	HELPFL=false
+    else
+	echo "  ${SPACES:0:$HELPSIZE}${HELPS[$1]}"
+    fi
+}
+init_gen()
+{
+    if [[ $HELPSIZE -gt 24 ]]
+    then
+	HELPSIZE=27
+    else
+	HELPSIZE=$[$HELPSIZE+2]
+    fi
+    REPLYTO="usehelp $HELPSC"
+    HELPS[$HELPSC]='display this help and exit'
+    HELPSC=$[$HELPSC+1]
+    gen_switch "HELP -h --help" "$REPLYTO" false
+    REPLYTO="usehelp $HELPSC"
+    HELPS[$HELPSC]='output version information and exit'
+    HELPSC=$[$HELPSC+1]
+    gen_switch "VERSION --version" "$REPLYTO" false
 }
 
 PROGRAM=
@@ -177,6 +244,9 @@ HELPSIZE=0
 REQ_ARG=false
 NO_ARG=false
 REQ_SARG=false
+
+declare -a HELPS
+HELPSC=0
 
 readto()
 {
@@ -204,18 +274,11 @@ readtoz()
 	if [[ -z "$REPLY" ]]
 	then break
 	fi
-    if [[ -z "$REPLYTO" ]]
-    then
-    REPLYTO="$REPLY"
-    else
-    REPLYTO="$REPLYTO
-$REPLY"
-    fi
+	REPLYTO="$REPLYTO
+usehelp $HELPSC"
+	HELPS[$HELPSC]="$REPLY"
+	HELPSC=$[$HELPSC+1]
     done
-    if [[ ! -z "$1" ]]
-    then
-	eval $1\=\"\$REPLYTO\"
-    fi
 }
 
 while :
@@ -264,20 +327,23 @@ warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.'
 	;;
     @textdomain )
 	NLS='$'
-	NLSINIT='
+	NLSINIT="
 
-TEXTDOMAIN=$ARGS'
+TEXTDOMAIN=$ARGS"
 	;;
     @end )
-	gen_switch "HELP -h --help" 'display this help and exit'
-	gen_switch "VERSION --version"  'output version information and exit'
+	init_gen
 	break
 	;;
     "" )
 	;;
     @switch )
 	readtoz
-	gen_switch "$ARGS" "$REPLYTO"
+	gen_switch "$ARGS" "$REPLYTO" false
+	;;
+    @cntswitch )
+	readtoz
+	gen_switch "$ARGS" "$REPLYTO" true
 	;;
     @option )
 	readtoz
@@ -289,7 +355,7 @@ TEXTDOMAIN=$ARGS'
 done
 
 echo '#! /bin/bash
-# This file is generated by genopts from '"$1"'.gopts'"$NLSINIT"'.
+# This file is generated by genopts from '"$1"'.gopts.'"$NLSINIT"'
 
 opt_err()
 {
@@ -328,7 +394,7 @@ if $REQ_SARG
 then echo '
 opt_err_req_sarg()
 {
-    opt_err '"$NLS"'"ls: option requires an argument -- $1"
+    opt_err '"$NLS"'"option requires an argument -- $1"
 }'
 fi
 
@@ -345,11 +411,13 @@ Copyright (C) $YEAR $AUTHOR$FREECOPY\"
 opt_arg_usage()
 {
     echo $NLS\"Usage: \$0 $USAGE$SHORT
-$HELP
-$DEFAULTS_TXT$BUGSTO\"
+"
+eval "$HELP"
+echo "$DEFAULTS_TXT$BUGSTO\"
     exit 0
 }
-$DEFVARS"
+
+declare -a ARGV$DEFVARS"
 
 echo '
 optarg_parse()
@@ -359,20 +427,19 @@ optarg_parse()
 	case "$1" in'"$LONGPARSE"'
 	-- )
 	    shift
-	    ARGLIST=("${ARGLIST[@]}" "$@")
+	    ARGV=("${ARGV[@]}" "$@")
 	    break
 	    ;;
 	--* )
 	    opt_err_bad_arg $1
 	    ;;
 	- )
-	    ARGLIST=("${ARGLIST[@]}" "$1")
+	    ARGV=("${ARGV[@]}" "$1")
 	    ;;
 	-* )
 	    OPTTMP="${1:1}"
 	    until [[ -z "$OPTTMP" ]]
 	    do
-	    echo "/${OPTTMP:1}/${OPTTMP:0:1}/${OPTTMP:1}/"
 		case "${OPTTMP:0:1}" in'"$SHORTPARSE"'
 		* )
 		    opt_err_bad_sarg ${OPTTMP:0:1}
@@ -382,7 +449,7 @@ optarg_parse()
 	    done
 	    ;;
 	* )
-	    ARGLIST=("${ARGLIST[@]}" "$1")
+	    ARGV=("${ARGV[@]}" "$1")
 	    ;;
 	esac
     shift
