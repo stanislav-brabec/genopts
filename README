@@ -4,8 +4,8 @@ in scripts.
 Features:
 - Meta language for switch description.
 - Automatic generating of --help and --version string.
-- Pure bash coding - no external utilitiesd needed.
-­ NLS support.
+- Pure bash coding - no external utilities needed.
+  NLS support.
 - No docs yet, but complete example added.
 
 Do ./genopts genopts_example and watch what was happened.
@@ -14,3 +14,8 @@ Then do ./genopts_example --help and continue in testing.
 Only NLS isn't added in this example:
 @textdomain nlsdomain
 causes enabling NLS on all strings with defined TEXTDOMAIN.
+
+http://www.penguin.cz/~utx/
+https://github.com/stanislav-brabec/genopts
+http://www.penguin.cz/~utx/ftp/genopts/
+ftp://ftp.penguin.cz/pub/users/utx/genopts/
